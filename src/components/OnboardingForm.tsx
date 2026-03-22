@@ -170,10 +170,10 @@ export function OnboardingForm() {
               )}
 
               {/* Patience Message */}
-              <div className="mt-4 p-3 bg-yellow-50 rounded-lg border-2 border-yellow-300">
-                <p className="text-xs text-yellow-800 text-center font-semibold">
-                  ⚡ <strong>Demo Mode Active:</strong> Using simulated streaming to demonstrate the feature. 
-                  Real AI generation may be slower on your device.
+              <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                <p className="text-xs text-blue-700 text-center">
+                  💡 <strong>Intel i3 Optimized:</strong> AI runs locally in your browser. 
+                  Generation optimized for your device. Keep posts low (2-3) for best performance.
                 </p>
               </div>
             </div>
@@ -324,19 +324,22 @@ export function OnboardingForm() {
             </label>
             <input
               type="range"
-              min="4"
-              max="30"
+              min="2"
+              max="10"
               value={formData.postsPerMonth}
               onChange={(e) => updateFormData({ postsPerMonth: parseInt(e.target.value) })}
               className="w-full h-3 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-orange-500 hover:accent-pink-500 transition-all"
               style={{
-                background: `linear-gradient(to right, #f97316 0%, #ec4899 ${((formData.postsPerMonth - 4) / 26) * 100}%, #e5e7eb ${((formData.postsPerMonth - 4) / 26) * 100}%, #e5e7eb 100%)`
+                background: `linear-gradient(to right, #f97316 0%, #ec4899 ${((formData.postsPerMonth - 2) / 8) * 100}%, #e5e7eb ${((formData.postsPerMonth - 2) / 8) * 100}%, #e5e7eb 100%)`
               }}
             />
             <div className="flex justify-between text-sm text-gray-500 mt-2 font-medium">
-              <span>4 posts</span>
-              <span>30 posts</span>
+              <span>2 posts (fastest)</span>
+              <span>10 posts</span>
             </div>
+            <p className="text-xs text-orange-600 mt-2 font-semibold">
+              ⚡ Lower = Faster generation on your device
+            </p>
           </div>
 
           {/* Posting days */}

@@ -55,7 +55,7 @@ export async function generateCalendarTitles(
 
   // EMERGENCY FALLBACK: If generation takes too long, use this
   // Remove this section once model performance is acceptable
-  const USE_FALLBACK = true; // Set to true to test quickly
+  const USE_FALLBACK = false; // Set to true to test quickly
   
   if (USE_FALLBACK) {
     console.warn('[CalendarAgent] 🚀 Using fallback mode with simulated streaming (model too slow)');
@@ -143,29 +143,16 @@ function buildCalendarPrompt(
   numPosts: number,
   strict = false
 ): string {
-  const monthName = format(currentMonth, 'MMMM yyyy');
-
-  let prompt = '';
-
+  // ULTRA SIMPLIFIED PROMPT FOR LOW-POWER DEVICES
+  // Shorter prompt = faster processing on Intel i3
+  
   if (seriesContext) {
-    // Continuing an existing series - SIMPLIFIED
-    prompt = `Continue content series "${seriesContext.seriesName}" for ${monthName}.
-Theme: ${seriesContext.seriesTheme}
-Previous titles: ${seriesContext.lastThreeTitles.slice(0, 2).join(', ')}
-
-Platform: ${formData.platform}
-Generate ${numPosts} ${formData.tone.toLowerCase()} post titles in ${formData.language} as JSON array.
-
-Example: ["Title 1", "Title 2"]`;
+    // Continuing series - MINIMAL
+    return `Continue "${seriesContext.seriesName}". ${numPosts} titles. JSON array: ["T1","T2"]`;
   } else {
-    // Starting a new series - SIMPLIFIED
-    prompt = `Create ${numPosts} ${formData.tone.toLowerCase()} ${formData.platform} post titles for ${formData.niche} in ${formData.language}.
-Make them a cohesive series.
-
-Respond with JSON array only: ["Title 1", "Title 2", ...]`;
+    // New series - MINIMAL
+    return `${numPosts} ${formData.niche} post titles. JSON: ["T1","T2"]`;
   }
-
-  return prompt;
 }
 
 // ============================================================================
@@ -200,9 +187,9 @@ async function generateWithLLM(prompt: string, onToken?: (token: string, accumul
         const streamStartTime = Date.now();
         
         const { stream, result: resultPromise } = await TextGeneration.generateStream(prompt, {
-          maxTokens: 128,  // DRASTICALLY reduced - just enough for short titles
-          temperature: 0.8,  // Higher temp = faster, less careful generation
-          systemPrompt: 'JSON array only.',  // Minimal system prompt
+          maxTokens: 40,  // ULTRA LOW - optimized for Intel i3 (was 128)
+          temperature: 0.9,  // Very high temp = faster, more random (better for low-power)
+          systemPrompt: 'JSON only',  // Ultra minimal
         });
         
         console.log('[CalendarAgent] 🌊 Stream initialized in', ((Date.now() - streamStartTime) / 1000).toFixed(2), 'seconds');
@@ -235,9 +222,9 @@ async function generateWithLLM(prompt: string, onToken?: (token: string, accumul
     } else {
       // Batch generation (original logic)
       generationPromise = TextGeneration.generate(prompt, {
-        maxTokens: 128,
-        temperature: 0.8,
-        systemPrompt: 'JSON array only.',
+        maxTokens: 40,  // ULTRA LOW - optimized for Intel i3
+        temperature: 0.9,
+        systemPrompt: 'JSON only',
       }).then(result => result.text);
     }
     

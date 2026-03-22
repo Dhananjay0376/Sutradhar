@@ -20,6 +20,16 @@ export function LoadingScreen() {
         await initSDK();
         
         console.log('[LoadingScreen] SDK initialized successfully');
+        
+        // Check WebGPU support
+        const { getAccelerationMode } = await import('../runanywhere');
+        const accelMode = getAccelerationMode();
+        console.log('[LoadingScreen] 🚀 Acceleration mode:', accelMode || 'CPU only (SLOW)');
+        
+        if (!accelMode || accelMode === 'cpu') {
+          console.warn('[LoadingScreen] ⚠️ WebGPU not available. Generation will be VERY slow on Intel i3.');
+          console.warn('[LoadingScreen] 💡 Try Chrome/Edge with --enable-unsafe-webgpu flag for faster inference');
+        }
 
         // Check if LLM is already loaded
         const loadedModel = ModelManager.getLoadedModel(ModelCategory.Language);
@@ -41,7 +51,7 @@ export function LoadingScreen() {
 
         // SKIP LOADING SCREEN IF USING FALLBACK MODE
         // Since you're using fallback mode (no real AI), we can skip the loading entirely
-        const SKIP_MODEL_LOAD = true; // Set to false to load the real model
+        const SKIP_MODEL_LOAD = false; // Set to false to load the real model
         
         if (SKIP_MODEL_LOAD && isDownloaded) {
           console.log('[LoadingScreen] ⚡ Skipping model load - fallback mode active');

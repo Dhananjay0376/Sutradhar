@@ -103,8 +103,8 @@ const DEFAULT_FORM_DATA: FormData = {
   platform: 'Instagram',
   language: 'English',
   tone: 'Casual',
-  postsPerMonth: 4,  // Reduced to 4 for much faster generation
-  postingDays: [1, 3, 5], // Mon, Wed, Fri
+  postsPerMonth: 2,  // ULTRA LOW for Intel i3 optimization (was 4)
+  postingDays: [1, 5], // Mon, Fri only
 };
 
 // ============================================================================
