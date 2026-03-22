@@ -68,6 +68,7 @@ interface AppState {
   postTitles: PostTitle[];
   isGeneratingCalendar: boolean;
   calendarError: string | null;
+  calendarStreamingText: string; // Add streaming text state
   generateCalendar: (isNewSeries: boolean) => Promise<void>;
   setCurrentMonth: (date: Date) => void;
 
@@ -132,10 +133,11 @@ export const useStore = create<AppState>()(
       postTitles: [],
       isGeneratingCalendar: false,
       calendarError: null,
+      calendarStreamingText: '', // Initialize streaming text
       setCurrentMonth: (date) => set({ currentMonth: date }),
 
       generateCalendar: async (isNewSeries: boolean) => {
-        set({ isGeneratingCalendar: true, calendarError: null });
+        set({ isGeneratingCalendar: true, calendarError: null, calendarStreamingText: '' });
 
         try {
           const { formData, currentMonth, seriesContext } = get();
@@ -147,9 +149,13 @@ export const useStore = create<AppState>()(
             formData,
             currentMonth,
             seriesContext: isNewSeries ? null : seriesContext,
+            onToken: (token: string, accumulated: string) => {
+              // Update streaming text in real-time
+              set({ calendarStreamingText: accumulated });
+            },
           });
 
-          set({ postTitles: titles, isGeneratingCalendar: false });
+          set({ postTitles: titles, isGeneratingCalendar: false, calendarStreamingText: '' });
 
           // Save series context after first generation
           if (isNewSeries || !seriesContext) {

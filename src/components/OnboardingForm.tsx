@@ -9,7 +9,7 @@ const LANGUAGES: Language[] = ['English', 'Hindi', 'Hinglish', 'Spanish', 'Frenc
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 export function OnboardingForm() {
-  const { formData, updateFormData, generateCalendar, isGeneratingCalendar, calendarError } = useStore();
+  const { formData, updateFormData, generateCalendar, isGeneratingCalendar, calendarError, calendarStreamingText } = useStore();
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -123,6 +123,19 @@ export function OnboardingForm() {
                 </svg>
                 <span>This may take 30-90 seconds depending on your device</span>
               </div>
+
+              {/* Streaming Output */}
+              {calendarStreamingText && (
+                <div className="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200 max-h-32 overflow-y-auto">
+                  <div className="flex items-start gap-2 mb-2">
+                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse mt-1.5 flex-shrink-0" />
+                    <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Live Generation</p>
+                  </div>
+                  <pre className="text-xs text-gray-600 font-mono whitespace-pre-wrap break-words">
+                    {calendarStreamingText}
+                  </pre>
+                </div>
+              )}
 
               {/* Patience Message */}
               <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">

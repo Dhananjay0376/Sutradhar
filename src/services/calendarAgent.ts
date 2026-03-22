@@ -11,12 +11,13 @@ interface GenerateCalendarParams {
   formData: FormData;
   currentMonth: Date;
   seriesContext: SeriesContext | null;
+  onToken?: (token: string, accumulated: string) => void;
 }
 
 export async function generateCalendarTitles(
   params: GenerateCalendarParams
 ): Promise<PostTitle[]> {
-  const { formData, currentMonth, seriesContext } = params;
+  const { formData, currentMonth, seriesContext, onToken } = params;
 
   // Validate that the LLM model is loaded
   console.log('[CalendarAgent] Checking if LLM model is loaded...');
@@ -52,14 +53,33 @@ export async function generateCalendarTitles(
     platform: formData.platform,
   });
 
+  // EMERGENCY FALLBACK: If generation takes too long, use this
+  // Remove this section once model performance is acceptable
+  const USE_FALLBACK = false; // Set to true to test quickly
+  
+  if (USE_FALLBACK) {
+    console.warn('[CalendarAgent] Using fallback mock titles (model too slow)');
+    const mockTitles = Array(targetDays.length).fill(null).map((_, i) => 
+      `${formData.niche} Journey: Part ${i + 1} - ${['Basics', 'Progress', 'Mastery', 'Advanced', 'Expert', 'Pro Tips', 'Deep Dive', 'Secrets'][i] || 'Topic ' + (i + 1)}`
+    );
+    
+    const postTitles: PostTitle[] = targetDays.map((day, index) => ({
+      date: format(day, 'yyyy-MM-dd'),
+      title: mockTitles[index],
+      dayOfWeek: getDay(day),
+    }));
+    
+    return postTitles;
+  }
+
   // Build prompt
   const prompt = buildCalendarPrompt(formData, currentMonth, seriesContext, targetDays.length);
 
-  // Generate with retry logic for invalid JSON
-  let response = await generateWithLLM(prompt);
+  // Generate with retry logic for invalid JSON (with optional streaming)
+  let response = await generateWithLLM(prompt, onToken);
   let titles = parseCalendarJSON(response);
 
-  // Retry once if JSON is invalid
+  // Retry once if JSON is invalid (without streaming on retry to be faster)
   if (!titles || titles.length === 0) {
     console.warn('First attempt returned invalid JSON. Retrying with stricter prompt...');
     const stricterPrompt = buildCalendarPrompt(formData, currentMonth, seriesContext, targetDays.length, true);
@@ -121,11 +141,16 @@ Respond with JSON array only: ["Title 1", "Title 2", ...]`;
 // LLM Generation
 // ============================================================================
 
-async function generateWithLLM(prompt: string): Promise<string> {
+async function generateWithLLM(prompt: string, onToken?: (token: string, accumulated: string) => void): Promise<string> {
   console.log('[CalendarAgent] Starting LLM generation...');
   console.log('[CalendarAgent] Prompt length:', prompt.length, 'characters');
   console.log('[CalendarAgent] Prompt preview:', prompt.substring(0, 200) + '...');
-  console.log('[CalendarAgent] ⏳ Please wait, generation may take 30-60 seconds on slower devices...');
+  
+  if (onToken) {
+    console.log('[CalendarAgent] 🌊 Streaming mode enabled - tokens will arrive progressively');
+  } else {
+    console.log('[CalendarAgent] ⏳ Batch mode - please wait, generation may take 30-60 seconds...');
+  }
   
   try {
     const startTime = Date.now();
@@ -135,23 +160,45 @@ async function generateWithLLM(prompt: string): Promise<string> {
       setTimeout(() => reject(new Error('Generation timeout after 120 seconds. Your device may be too slow for this model. Try reducing the number of posts to 2-3 or refresh the page.')), 120000);
     });
     
-    // Race between generation and timeout
-    const generationPromise = TextGeneration.generate(prompt, {
-      maxTokens: 128,  // DRASTICALLY reduced - just enough for short titles
-      temperature: 0.8,  // Higher temp = faster, less careful generation
-      systemPrompt: 'JSON array only.',  // Minimal system prompt
-    });
+    let generationPromise: Promise<string>;
     
-    const result = await Promise.race([generationPromise, timeoutPromise]);
+    if (onToken) {
+      // Streaming generation
+      generationPromise = (async () => {
+        const { stream, result: resultPromise } = await TextGeneration.generateStream(prompt, {
+          maxTokens: 128,  // DRASTICALLY reduced - just enough for short titles
+          temperature: 0.8,  // Higher temp = faster, less careful generation
+          systemPrompt: 'JSON array only.',  // Minimal system prompt
+        });
+        
+        let accumulated = '';
+        for await (const token of stream) {
+          accumulated += token;
+          onToken(token, accumulated);
+        }
+        
+        const result = await resultPromise;
+        return result.text || accumulated;
+      })();
+    } else {
+      // Batch generation (original logic)
+      generationPromise = TextGeneration.generate(prompt, {
+        maxTokens: 128,
+        temperature: 0.8,
+        systemPrompt: 'JSON array only.',
+      }).then(result => result.text);
+    }
+    
+    const text = await Promise.race([generationPromise, timeoutPromise]);
     
     const endTime = Date.now();
     const duration = ((endTime - startTime) / 1000).toFixed(2);
     
     console.log('[CalendarAgent] ✅ LLM generation completed in', duration, 'seconds');
-    console.log('[CalendarAgent] Response length:', result.text.length, 'characters');
-    console.log('[CalendarAgent] Response preview:', result.text.substring(0, 200));
+    console.log('[CalendarAgent] Response length:', text.length, 'characters');
+    console.log('[CalendarAgent] Response preview:', text.substring(0, 200));
     
-    return result.text;
+    return text;
   } catch (error) {
     console.error('[CalendarAgent] ❌ LLM generation failed:', error);
     throw error;
