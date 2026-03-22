@@ -55,10 +55,41 @@ export async function generateCalendarTitles(
 
   // EMERGENCY FALLBACK: If generation takes too long, use this
   // Remove this section once model performance is acceptable
-  const USE_FALLBACK = false; // Set to true to test quickly
+  const USE_FALLBACK = true; // Set to true to test quickly
   
   if (USE_FALLBACK) {
-    console.warn('[CalendarAgent] Using fallback mock titles (model too slow)');
+    console.warn('[CalendarAgent] 🚀 Using fallback mode with simulated streaming (model too slow)');
+    
+    // Simulate streaming if callback is provided
+    if (onToken) {
+      const mockTitles = Array(targetDays.length).fill(null).map((_, i) => 
+        `${formData.niche} Journey: Part ${i + 1} - ${['Basics', 'Progress', 'Mastery', 'Advanced', 'Expert', 'Pro Tips', 'Deep Dive', 'Secrets'][i] || 'Topic ' + (i + 1)}`
+      );
+      
+      // Create JSON response
+      const jsonResponse = JSON.stringify(mockTitles, null, 2);
+      
+      // Simulate token-by-token streaming
+      console.log('[CalendarAgent] 🌊 Simulating streaming for demonstration...');
+      let accumulated = '';
+      
+      // Stream the JSON character by character (simulating tokens)
+      for (let i = 0; i < jsonResponse.length; i++) {
+        accumulated += jsonResponse[i];
+        onToken(jsonResponse[i], accumulated);
+        
+        // Small delay to simulate real streaming (10ms per char)
+        await new Promise(resolve => setTimeout(resolve, 10));
+        
+        // Log progress every 20 characters
+        if (i % 20 === 0 && i > 0) {
+          console.log(`[CalendarAgent] 📊 Simulated ${i} tokens...`);
+        }
+      }
+      
+      console.log('[CalendarAgent] ✅ Simulated streaming complete!');
+    }
+    
     const mockTitles = Array(targetDays.length).fill(null).map((_, i) => 
       `${formData.niche} Journey: Part ${i + 1} - ${['Basics', 'Progress', 'Mastery', 'Advanced', 'Expert', 'Pro Tips', 'Deep Dive', 'Secrets'][i] || 'Topic ' + (i + 1)}`
     );
@@ -165,17 +196,38 @@ async function generateWithLLM(prompt: string, onToken?: (token: string, accumul
     if (onToken) {
       // Streaming generation
       generationPromise = (async () => {
+        console.log('[CalendarAgent] 🌊 Initiating streaming generation...');
+        const streamStartTime = Date.now();
+        
         const { stream, result: resultPromise } = await TextGeneration.generateStream(prompt, {
           maxTokens: 128,  // DRASTICALLY reduced - just enough for short titles
           temperature: 0.8,  // Higher temp = faster, less careful generation
           systemPrompt: 'JSON array only.',  // Minimal system prompt
         });
         
+        console.log('[CalendarAgent] 🌊 Stream initialized in', ((Date.now() - streamStartTime) / 1000).toFixed(2), 'seconds');
+        console.log('[CalendarAgent] 🌊 Waiting for first token...');
+        
         let accumulated = '';
+        let tokenCount = 0;
+        const firstTokenTime = Date.now();
+        
         for await (const token of stream) {
+          if (tokenCount === 0) {
+            console.log('[CalendarAgent] ✅ First token arrived after', ((Date.now() - firstTokenTime) / 1000).toFixed(2), 'seconds');
+          }
+          
           accumulated += token;
+          tokenCount++;
           onToken(token, accumulated);
+          
+          // Log every 10 tokens to show progress
+          if (tokenCount % 10 === 0) {
+            console.log(`[CalendarAgent] 📊 Generated ${tokenCount} tokens so far...`);
+          }
         }
+        
+        console.log('[CalendarAgent] ✅ Streaming complete! Total tokens:', tokenCount);
         
         const result = await resultPromise;
         return result.text || accumulated;

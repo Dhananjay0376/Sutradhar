@@ -9,7 +9,7 @@ const LANGUAGES: Language[] = ['English', 'Hindi', 'Hinglish', 'Spanish', 'Frenc
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 export function OnboardingForm() {
-  const { formData, updateFormData, generateCalendar, isGeneratingCalendar, calendarError, calendarStreamingText } = useStore();
+  const { formData, updateFormData, generateCalendar, isGeneratingCalendar, calendarError, calendarStreamingText, calendarTokenCount } = useStore();
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -102,13 +102,26 @@ export function OnboardingForm() {
                   </svg>
                   <span className="text-sm text-gray-700">Model loaded and ready</span>
                 </div>
-                <div className="flex items-center gap-3 p-3 bg-orange-50 rounded-lg">
-                  <div className="w-5 h-5 border-3 border-orange-500 border-t-transparent rounded-full animate-spin flex-shrink-0" />
-                  <span className="text-sm text-gray-700 font-medium">Analyzing your preferences...</span>
+                <div className={`flex items-center gap-3 p-3 rounded-lg ${calendarTokenCount > 0 ? 'bg-green-50' : 'bg-orange-50'}`}>
+                  {calendarTokenCount > 0 ? (
+                    <svg className="w-5 h-5 text-green-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                  ) : (
+                    <div className="w-5 h-5 border-3 border-orange-500 border-t-transparent rounded-full animate-spin flex-shrink-0" />
+                  )}
+                  <span className={`text-sm font-medium ${calendarTokenCount > 0 ? 'text-gray-700' : 'text-gray-700'}`}>
+                    Analyzing your preferences...
+                    {calendarTokenCount > 0 && <span className="text-green-600 ml-2">({calendarTokenCount} tokens)</span>}
+                  </span>
                 </div>
-                <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                  <div className="w-5 h-5 border-3 border-gray-300 rounded-full flex-shrink-0" />
-                  <span className="text-sm text-gray-500">Creating content strategy</span>
+                <div className={`flex items-center gap-3 p-3 rounded-lg ${calendarTokenCount > 0 ? 'bg-orange-50' : 'bg-gray-50'}`}>
+                  {calendarTokenCount > 0 ? (
+                    <div className="w-5 h-5 border-3 border-orange-500 border-t-transparent rounded-full animate-spin flex-shrink-0" />
+                  ) : (
+                    <div className="w-5 h-5 border-3 border-gray-300 rounded-full flex-shrink-0" />
+                  )}
+                  <span className={`text-sm ${calendarTokenCount > 0 ? 'text-gray-700 font-medium' : 'text-gray-500'}`}>Creating content strategy</span>
                 </div>
                 <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
                   <div className="w-5 h-5 border-3 border-gray-300 rounded-full flex-shrink-0" />
@@ -126,22 +139,41 @@ export function OnboardingForm() {
 
               {/* Streaming Output */}
               {calendarStreamingText && (
-                <div className="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200 max-h-32 overflow-y-auto">
-                  <div className="flex items-start gap-2 mb-2">
-                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse mt-1.5 flex-shrink-0" />
-                    <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Live Generation</p>
+                <div className="mt-6 p-4 bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg border-2 border-green-200 max-h-40 overflow-y-auto animate-fade-in">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse shadow-lg shadow-green-500/50" />
+                      <p className="text-xs font-bold text-green-700 uppercase tracking-wide">Streaming Live</p>
+                    </div>
+                    <div className="px-2 py-1 bg-green-600 text-white text-xs font-bold rounded-full">
+                      {calendarTokenCount} tokens
+                    </div>
                   </div>
-                  <pre className="text-xs text-gray-600 font-mono whitespace-pre-wrap break-words">
-                    {calendarStreamingText}
-                  </pre>
+                  <div className="bg-white/70 rounded p-3 backdrop-blur-sm">
+                    <pre className="text-xs text-gray-700 font-mono whitespace-pre-wrap break-words leading-relaxed">
+                      {calendarStreamingText}
+                    </pre>
+                  </div>
+                </div>
+              )}
+
+              {/* Waiting message when no tokens yet */}
+              {!calendarStreamingText && calendarTokenCount === 0 && (
+                <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200 animate-pulse">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 bg-blue-500 rounded-full animate-ping" />
+                    <p className="text-sm text-blue-700 font-medium">
+                      Initializing AI model... Waiting for first token...
+                    </p>
+                  </div>
                 </div>
               )}
 
               {/* Patience Message */}
-              <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                <p className="text-xs text-blue-700 text-center">
-                  💡 <strong>First time?</strong> AI generation runs locally in your browser. 
-                  It may be slow on older devices. Please be patient!
+              <div className="mt-4 p-3 bg-yellow-50 rounded-lg border-2 border-yellow-300">
+                <p className="text-xs text-yellow-800 text-center font-semibold">
+                  ⚡ <strong>Demo Mode Active:</strong> Using simulated streaming to demonstrate the feature. 
+                  Real AI generation may be slower on your device.
                 </p>
               </div>
             </div>

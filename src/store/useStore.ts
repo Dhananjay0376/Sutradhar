@@ -69,6 +69,7 @@ interface AppState {
   isGeneratingCalendar: boolean;
   calendarError: string | null;
   calendarStreamingText: string; // Add streaming text state
+  calendarTokenCount: number; // Add token counter
   generateCalendar: (isNewSeries: boolean) => Promise<void>;
   setCurrentMonth: (date: Date) => void;
 
@@ -134,10 +135,11 @@ export const useStore = create<AppState>()(
       isGeneratingCalendar: false,
       calendarError: null,
       calendarStreamingText: '', // Initialize streaming text
+      calendarTokenCount: 0, // Initialize token counter
       setCurrentMonth: (date) => set({ currentMonth: date }),
 
       generateCalendar: async (isNewSeries: boolean) => {
-        set({ isGeneratingCalendar: true, calendarError: null, calendarStreamingText: '' });
+        set({ isGeneratingCalendar: true, calendarError: null, calendarStreamingText: '', calendarTokenCount: 0 });
 
         try {
           const { formData, currentMonth, seriesContext } = get();
@@ -145,17 +147,19 @@ export const useStore = create<AppState>()(
           // Import here to avoid circular dependencies
           const { generateCalendarTitles } = await import('../services/calendarAgent');
           
+          let tokenCount = 0;
           const titles = await generateCalendarTitles({
             formData,
             currentMonth,
             seriesContext: isNewSeries ? null : seriesContext,
             onToken: (token: string, accumulated: string) => {
+              tokenCount++;
               // Update streaming text in real-time
-              set({ calendarStreamingText: accumulated });
+              set({ calendarStreamingText: accumulated, calendarTokenCount: tokenCount });
             },
           });
 
-          set({ postTitles: titles, isGeneratingCalendar: false, calendarStreamingText: '' });
+          set({ postTitles: titles, isGeneratingCalendar: false, calendarStreamingText: '', calendarTokenCount: 0 });
 
           // Save series context after first generation
           if (isNewSeries || !seriesContext) {

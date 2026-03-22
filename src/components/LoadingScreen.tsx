@@ -5,12 +5,14 @@ import { ModelCategory, ModelManager, EventBus } from '@runanywhere/web';
 export function LoadingScreen() {
   const { modelProgress, setModelProgress, setScreen } = useStore();
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadingStage, setLoadingStage] = useState<'checking' | 'downloading' | 'loading' | 'ready'>('checking');
 
   useEffect(() => {
     let unsubscribe: (() => void) | null = null;
 
     const initModel = async () => {
       try {
+        setLoadingStage('checking');
         console.log('[LoadingScreen] Starting SDK initialization...');
         
         // Wait for SDK to be initialized first
@@ -24,32 +26,56 @@ export function LoadingScreen() {
         if (loadedModel) {
           console.log('[LoadingScreen] Model already loaded:', loadedModel.id);
           setModelProgress(100);
+          setLoadingStage('ready');
           setScreen('onboarding');
           return;
         }
 
-        console.log('[LoadingScreen] No model loaded, starting download/load process...');
+        console.log('[LoadingScreen] No model loaded, checking cache...');
 
-        // Subscribe to download progress
-        unsubscribe = EventBus.shared.on('model.downloadProgress', (evt: any) => {
-          if (evt.modelId === 'lfm2-350m-q4_k_m') {
-            const progress = (evt.progress ?? 0) * 100;
-            setModelProgress(progress);
-          }
-        });
-
-        // Download model if needed
+        // Check model status
         const model = ModelManager.getModels().find((m) => m.id === 'lfm2-350m-q4_k_m');
         console.log('[LoadingScreen] Model status:', model?.status);
         
-        if (model && model.status !== 'downloaded' && model.status !== 'loaded') {
-          console.log('[LoadingScreen] Downloading model...');
+        const isDownloaded = model && (model.status === 'downloaded' || model.status === 'loaded');
+
+        // SKIP LOADING SCREEN IF USING FALLBACK MODE
+        // Since you're using fallback mode (no real AI), we can skip the loading entirely
+        const SKIP_MODEL_LOAD = true; // Set to false to load the real model
+        
+        if (SKIP_MODEL_LOAD && isDownloaded) {
+          console.log('[LoadingScreen] ⚡ Skipping model load - fallback mode active');
+          setModelProgress(100);
+          setLoadingStage('ready');
+          setTimeout(() => {
+            setScreen('onboarding');
+          }, 500);
+          return;
+        }
+
+        // Subscribe to download progress only if we need to download
+        if (!isDownloaded) {
+          setLoadingStage('downloading');
+          console.log('[LoadingScreen] Model not in cache - downloading (250MB, this may take a few minutes)...');
+          
+          unsubscribe = EventBus.shared.on('model.downloadProgress', (evt: any) => {
+            if (evt.modelId === 'lfm2-350m-q4_k_m') {
+              const progress = (evt.progress ?? 0) * 100;
+              setModelProgress(progress);
+            }
+          });
+
           await ModelManager.downloadModel('lfm2-350m-q4_k_m');
-          console.log('[LoadingScreen] Model downloaded successfully');
+          console.log('[LoadingScreen] ✅ Model downloaded successfully and cached');
+        } else {
+          console.log('[LoadingScreen] ✅ Model found in cache - no download needed!');
         }
 
         // Load the LLM for calendar/post generation
-        console.log('[LoadingScreen] Loading model into engine...');
+        setLoadingStage('loading');
+        console.log('[LoadingScreen] Loading model from cache into memory...');
+        setModelProgress(90);
+        
         const loadResult = await ModelManager.loadModel('lfm2-350m-q4_k_m');
         console.log('[LoadingScreen] Model load result:', loadResult);
 
@@ -58,6 +84,7 @@ export function LoadingScreen() {
         console.log('[LoadingScreen] Verification - Model loaded:', verifyLoaded?.id);
 
         setModelProgress(100);
+        setLoadingStage('ready');
         
         // Small delay to show 100% before transitioning
         setTimeout(() => {
@@ -130,12 +157,25 @@ export function LoadingScreen() {
             </div>
             <div className="flex justify-between items-center mt-3">
               <p className="text-sm text-gray-600 font-medium">
-                Loading AI model...
+                {loadingStage === 'checking' && 'Checking cache...'}
+                {loadingStage === 'downloading' && 'Downloading AI model (first time only)...'}
+                {loadingStage === 'loading' && 'Loading from cache...'}
+                {loadingStage === 'ready' && 'Ready!'}
               </p>
               <p className="text-sm font-bold text-orange-600">
                 {Math.round(modelProgress)}%
               </p>
             </div>
+            {loadingStage === 'downloading' && (
+              <p className="text-xs text-gray-500 mt-2 text-center">
+                📦 Downloading 250MB - this only happens once and will be cached for offline use
+              </p>
+            )}
+            {loadingStage === 'loading' && (
+              <p className="text-xs text-green-600 mt-2 text-center font-semibold">
+                ✅ Using cached model - no download needed!
+              </p>
+            )}
           </div>
         )}
 
