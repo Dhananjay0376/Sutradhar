@@ -172,8 +172,8 @@ export function OnboardingForm() {
               {/* Patience Message */}
               <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
                 <p className="text-xs text-blue-700 text-center">
-                  💡 <strong>Intel i3 Optimized:</strong> AI runs locally in your browser. 
-                  Generation optimized for your device. Keep posts low (2-3) for best performance.
+                  💡 <strong>Intel i3 Optimized:</strong> Using smart template system for instant results. 
+                  Real AI inference is too slow on low-power devices.
                 </p>
               </div>
             </div>

@@ -6,6 +6,7 @@ export function LoadingScreen() {
   const { modelProgress, setModelProgress, setScreen } = useStore();
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loadingStage, setLoadingStage] = useState<'checking' | 'downloading' | 'loading' | 'ready'>('checking');
+  const [performanceWarning, setPerformanceWarning] = useState<string | null>(null);
 
   useEffect(() => {
     let unsubscribe: (() => void) | null = null;
@@ -21,14 +22,33 @@ export function LoadingScreen() {
         
         console.log('[LoadingScreen] SDK initialized successfully');
         
+        // Check if SharedArrayBuffer is available (indicates multi-threading support)
+        const hasSharedArrayBuffer = typeof SharedArrayBuffer !== 'undefined';
+        const hasCrossOriginIsolation = window.crossOriginIsolated === true;
+        
+        console.log('[LoadingScreen] 🧵 Multi-threading check:');
+        console.log('  - SharedArrayBuffer available:', hasSharedArrayBuffer);
+        console.log('  - Cross-Origin Isolated:', hasCrossOriginIsolation);
+        
+        if (!hasCrossOriginIsolation) {
+          console.error('[LoadingScreen] ⚠️ CRITICAL: Cross-Origin Isolation NOT enabled!');
+          console.error('[LoadingScreen] ⚠️ Running in SINGLE-THREADED mode (VERY SLOW)');
+          console.error('[LoadingScreen] 💡 Check COOP/COEP headers in vite.config.ts');
+          setPerformanceWarning('Running in single-threaded mode. Generation will be extremely slow. Check browser console for details.');
+        } else {
+          console.log('[LoadingScreen] ✅ Multi-threaded mode ENABLED!');
+        }
+        
         // Check WebGPU support
         const { getAccelerationMode } = await import('../runanywhere');
         const accelMode = getAccelerationMode();
         console.log('[LoadingScreen] 🚀 Acceleration mode:', accelMode || 'CPU only (SLOW)');
         
         if (!accelMode || accelMode === 'cpu') {
-          console.warn('[LoadingScreen] ⚠️ WebGPU not available. Generation will be VERY slow on Intel i3.');
-          console.warn('[LoadingScreen] 💡 Try Chrome/Edge with --enable-unsafe-webgpu flag for faster inference');
+          console.warn('[LoadingScreen] ⚠️ WebGPU not available. Generation will be slow on Intel i3.');
+          console.warn('[LoadingScreen] 💡 Try Chrome/Edge with WebGPU enabled');
+        } else {
+          console.log('[LoadingScreen] ✅ Hardware acceleration active:', accelMode);
         }
 
         // Check if LLM is already loaded
@@ -43,8 +63,9 @@ export function LoadingScreen() {
 
         console.log('[LoadingScreen] No model loaded, checking cache...');
 
-        // Check model status
-        const model = ModelManager.getModels().find((m) => m.id === 'lfm2-350m-q4_k_m');
+        // Check model status - using 350M (1.2B too slow for Intel i3)
+        const modelId = 'lfm2-350m-q4_k_m';
+        const model = ModelManager.getModels().find((m) => m.id === modelId);
         console.log('[LoadingScreen] Model status:', model?.status);
         
         const isDownloaded = model && (model.status === 'downloaded' || model.status === 'loaded');
@@ -66,16 +87,16 @@ export function LoadingScreen() {
         // Subscribe to download progress only if we need to download
         if (!isDownloaded) {
           setLoadingStage('downloading');
-          console.log('[LoadingScreen] Model not in cache - downloading (250MB, this may take a few minutes)...');
+          console.log('[LoadingScreen] Model not in cache - downloading (250MB)...');
           
           unsubscribe = EventBus.shared.on('model.downloadProgress', (evt: any) => {
-            if (evt.modelId === 'lfm2-350m-q4_k_m') {
+            if (evt.modelId === modelId) {
               const progress = (evt.progress ?? 0) * 100;
               setModelProgress(progress);
             }
           });
 
-          await ModelManager.downloadModel('lfm2-350m-q4_k_m');
+          await ModelManager.downloadModel(modelId);
           console.log('[LoadingScreen] ✅ Model downloaded successfully and cached');
         } else {
           console.log('[LoadingScreen] ✅ Model found in cache - no download needed!');
@@ -86,7 +107,9 @@ export function LoadingScreen() {
         console.log('[LoadingScreen] Loading model from cache into memory...');
         setModelProgress(90);
         
-        const loadResult = await ModelManager.loadModel('lfm2-350m-q4_k_m');
+        console.log('[LoadingScreen] Using model:', modelId, '(350M - with smart fallback for Intel i3)');
+        
+        const loadResult = await ModelManager.loadModel(modelId);
         console.log('[LoadingScreen] Model load result:', loadResult);
 
         // Verify model is actually loaded
@@ -186,6 +209,21 @@ export function LoadingScreen() {
                 ✅ Using cached model - no download needed!
               </p>
             )}
+          </div>
+        )}
+
+        {/* Performance Warning */}
+        {performanceWarning && (
+          <div className="mb-8 p-4 bg-yellow-50 border-2 border-yellow-300 rounded-lg">
+            <div className="flex items-start gap-3">
+              <svg className="w-6 h-6 text-yellow-600 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <div className="flex-1">
+                <h3 className="text-yellow-800 font-semibold mb-1">Performance Warning</h3>
+                <p className="text-yellow-700 text-sm">{performanceWarning}</p>
+              </div>
+            </div>
           </div>
         )}
 

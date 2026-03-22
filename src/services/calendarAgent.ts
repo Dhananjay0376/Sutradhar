@@ -14,6 +14,29 @@ interface GenerateCalendarParams {
   onToken?: (token: string, accumulated: string) => void;
 }
 
+// Smart template-based title generator (for devices that can't run AI fast enough)
+function generateSmartTitles(niche: string, count: number, platform: string): string[] {
+  const templates = {
+    // Content progression patterns
+    journey: ['Getting Started', 'First Steps', 'Building Momentum', 'Taking It Further', 'Advanced Strategies', 'Mastery Level', 'Expert Insights', 'Pro Secrets', 'Next Level', 'Ultimate Guide'],
+    tips: ['Essential Tips', 'Pro Tips', 'Hidden Gems', 'Game Changers', 'Must-Know Hacks', 'Insider Secrets', 'Power Moves', 'Expert Strategies', 'Winning Formula', 'Success Blueprint'],
+    mistakes: ['Common Mistakes', 'What NOT to Do', 'Avoid These Traps', 'Costly Errors', 'Red Flags', 'Warning Signs', 'Pitfalls to Avoid', 'Lessons Learned', 'Fixing Your Approach', 'Course Correction'],
+    how: ['How to Start', 'Step-by-Step Guide', 'Quick Tutorial', 'Easy Method', 'Simple Strategy', 'Proven Process', 'Actionable Plan', 'Complete Roadmap', 'Practical Approach', 'Real Results'],
+    why: ['Why This Matters', 'The Real Reason', 'Hidden Truth', 'What Nobody Tells You', 'Behind the Scenes', 'The Science', 'Understanding the Basics', 'Core Principles', 'Foundation First', 'The Reality'],
+  };
+  
+  // Choose a random pattern
+  const patterns = Object.keys(templates);
+  const pattern = patterns[Math.floor(Math.random() * patterns.length)] as keyof typeof templates;
+  const words = templates[pattern];
+  
+  // Generate titles
+  return Array(count).fill(null).map((_, i) => {
+    const word = words[i % words.length];
+    return `${niche}: ${word}`;
+  });
+}
+
 export async function generateCalendarTitles(
   params: GenerateCalendarParams
 ): Promise<PostTitle[]> {
@@ -53,50 +76,119 @@ export async function generateCalendarTitles(
     platform: formData.platform,
   });
 
-  // EMERGENCY FALLBACK: If generation takes too long, use this
-  // Remove this section once model performance is acceptable
-  const USE_FALLBACK = false; // Set to true to test quickly
+  // USE OLLAMA BACKEND for real AI (much faster than browser WASM)
+  const USE_OLLAMA_BACKEND = true; // Set to false to use browser AI
   
-  if (USE_FALLBACK) {
-    console.warn('[CalendarAgent] 🚀 Using fallback mode with simulated streaming (model too slow)');
+  if (USE_OLLAMA_BACKEND) {
+    console.log('[CalendarAgent] 🚀 Using Ollama backend for real AI generation');
     
-    // Simulate streaming if callback is provided
-    if (onToken) {
-      const mockTitles = Array(targetDays.length).fill(null).map((_, i) => 
-        `${formData.niche} Journey: Part ${i + 1} - ${['Basics', 'Progress', 'Mastery', 'Advanced', 'Expert', 'Pro Tips', 'Deep Dive', 'Secrets'][i] || 'Topic ' + (i + 1)}`
-      );
+    try {
+      // Check if backend is running
+      const healthCheck = await fetch('http://localhost:3001/api/health');
+      if (!healthCheck.ok) {
+        throw new Error('Ollama backend not running. Start it with: cd server && npm start');
+      }
       
-      // Create JSON response
-      const jsonResponse = JSON.stringify(mockTitles, null, 2);
+      console.log('[CalendarAgent] ✅ Backend connected');
       
-      // Simulate token-by-token streaming
-      console.log('[CalendarAgent] 🌊 Simulating streaming for demonstration...');
+      // Call backend API with streaming
+      const response = await fetch('http://localhost:3001/api/generate-calendar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          niche: formData.niche,
+          numPosts: targetDays.length,
+          platform: formData.platform,
+          language: formData.language,
+          tone: formData.tone,
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Backend API error: ' + response.statusText);
+      }
+      
+      // Stream tokens from backend
+      if (!response.body) {
+        throw new Error('No response body from backend');
+      }
+      
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
       let accumulated = '';
       
-      // Stream the JSON character by character (simulating tokens)
-      for (let i = 0; i < jsonResponse.length; i++) {
-        accumulated += jsonResponse[i];
-        onToken(jsonResponse[i], accumulated);
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
         
-        // Small delay to simulate real streaming (10ms per char)
-        await new Promise(resolve => setTimeout(resolve, 10));
+        const chunk = decoder.decode(value);
+        const lines = chunk.split('\n').filter(line => line.startsWith('data: '));
         
-        // Log progress every 20 characters
-        if (i % 20 === 0 && i > 0) {
-          console.log(`[CalendarAgent] 📊 Simulated ${i} tokens...`);
+        for (const line of lines) {
+          try {
+            const data = JSON.parse(line.slice(6)); // Remove "data: " prefix
+            
+            if (data.token && onToken) {
+              accumulated = data.accumulated;
+              onToken(data.token, accumulated);
+            }
+            
+            if (data.done) {
+              console.log('[CalendarAgent] ✅ Ollama generation complete');
+              const titles = parseCalendarJSON(data.text);
+              
+              if (!titles || titles.length === 0) {
+                throw new Error('Invalid JSON from Ollama');
+              }
+              
+              const postTitles: PostTitle[] = targetDays.map((day, index) => ({
+                date: format(day, 'yyyy-MM-dd'),
+                title: titles[index] || `Post ${index + 1}`,
+                dayOfWeek: getDay(day),
+              }));
+              
+              return postTitles;
+            }
+          } catch (e) {
+            // Skip malformed lines
+          }
         }
       }
       
-      console.log('[CalendarAgent] ✅ Simulated streaming complete!');
+      throw new Error('Stream ended without completion');
+      
+    } catch (error) {
+      console.error('[CalendarAgent] ❌ Ollama backend error:', error);
+      console.warn('[CalendarAgent] Falling back to template mode');
+      // Fall through to template fallback below
     }
+  }
+  
+  // FALLBACK: Template-based generation (instant, no AI)
+  const USE_FALLBACK = true;
+  
+  if (USE_FALLBACK) {
+    console.warn('[CalendarAgent] 🚀 Using smart template mode (Intel i3 optimized)');
     
-    const mockTitles = Array(targetDays.length).fill(null).map((_, i) => 
-      `${formData.niche} Journey: Part ${i + 1} - ${['Basics', 'Progress', 'Mastery', 'Advanced', 'Expert', 'Pro Tips', 'Deep Dive', 'Secrets'][i] || 'Topic ' + (i + 1)}`
-    );
+    // Generate contextual titles based on niche
+    const templates = generateSmartTitles(formData.niche, targetDays.length, formData.platform);
+    
+    // Simulate streaming if callback is provided
+    if (onToken) {
+      const jsonResponse = JSON.stringify(templates, null, 2);
+      console.log('[CalendarAgent] 🌊 Simulating streaming...');
+      
+      for (let i = 0; i < jsonResponse.length; i++) {
+        onToken(jsonResponse[i], jsonResponse.substring(0, i + 1));
+        await new Promise(resolve => setTimeout(resolve, 5)); // Fast streaming
+      }
+      
+      console.log('[CalendarAgent] ✅ Streaming complete!');
+    }
     
     const postTitles: PostTitle[] = targetDays.map((day, index) => ({
       date: format(day, 'yyyy-MM-dd'),
-      title: mockTitles[index],
+      title: templates[index],
       dayOfWeek: getDay(day),
     }));
     
@@ -143,15 +235,17 @@ function buildCalendarPrompt(
   numPosts: number,
   strict = false
 ): string {
-  // ULTRA SIMPLIFIED PROMPT FOR LOW-POWER DEVICES
-  // Shorter prompt = faster processing on Intel i3
+  // EXPLICIT JSON FORMAT for 1.2B Tool model
+  // This model is optimized for structured output
   
   if (seriesContext) {
-    // Continuing series - MINIMAL
-    return `Continue "${seriesContext.seriesName}". ${numPosts} titles. JSON array: ["T1","T2"]`;
+    // Continuing series
+    return `JSON array with ${numPosts} ${formData.niche} post titles continuing "${seriesContext.seriesName}":
+["title1","title2"]`;
   } else {
-    // New series - MINIMAL
-    return `${numPosts} ${formData.niche} post titles. JSON: ["T1","T2"]`;
+    // New series
+    return `JSON array with ${numPosts} ${formData.niche} post titles:
+["title1","title2"]`;
   }
 }
 
